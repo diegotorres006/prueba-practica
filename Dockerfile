@@ -9,8 +9,8 @@ RUN npm test
 # --- Etapa 2: imagen final, minima, solo lo necesario para ejecutar ---
 FROM node:20-alpine AS runtime
 WORKDIR /app
-ARG APP_VERSION=v1
-ARG APP_COLOR=blue
+ARG APP_VERSION=v2
+ARG APP_COLOR=yellow
 ARG SIMULATE_FAILURE=false
 ENV NODE_ENV=production
 ENV APP_VERSION=$APP_VERSION
