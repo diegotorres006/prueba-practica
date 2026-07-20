@@ -1,43 +1,38 @@
 # CI/CD en la práctica: de un commit a producción
 
-Este repositorio es el material de respaldo de la práctica en clase de **Sistemas Distribuidos — Despliegue de Aplicaciones**. Aquí vas a encontrar exactamente lo que viste hacer en el pizarrón (o en la pantalla del docente), pero explicado paso a paso, con el código completo y con la salida real que debería aparecerte a ti también si lo repites.
+Este repositorio es el material de respaldo de la práctica en clase de **Sistemas Distribuidos — Despliegue de Aplicaciones**. Aquí encontrará exactamente lo que se mostró en clase,  explicado paso a paso, con el código completo y con la salida de referencia que debería obtener.
 
-Úsalo así:
-
-- Si viste la demo en clase y quieres repasar **por qué** cada comando hace lo que hace, lee de corrido.
-- Si vas a **repetir la práctica tú mismo** (recomendado), sigue los pasos en orden y compara tu salida con la que se muestra aquí — si algo no coincide, esa diferencia normalmente ya te dice dónde está el problema.
-- Si solo necesitas recordar un comando puntual, usa el índice.
 
 ## Índice
 
-1. [¿Qué vas a construir?](#1-qué-vas-a-construir)
+1. [¿Qué se va a construir?](#1-qué-se-va-a-construir)
 2. [Antes de empezar](#2-antes-de-empezar)
 3. [Paso 1 — La aplicación: entender qué se está desplegando](#paso-1--la-aplicación-entender-qué-se-está-desplegando)
-4. [Paso 2 — CI local: "fail fast" en tu propia máquina](#paso-2--ci-local-fail-fast-en-tu-propia-máquina)
+4. [Paso 2 — CI local: "fail fast" en su propia máquina](#paso-2--ci-local-fail-fast-en-su-propia-máquina)
 5. [Paso 3 — Docker: el artefacto que no cambia](#paso-3--docker-el-artefacto-que-no-cambia)
 6. [Paso 4 — El pipeline real en GitHub Actions](#paso-4--el-pipeline-real-en-github-actions)
 7. [Paso 5 — Kubernetes: declarar el estado deseado](#paso-5--kubernetes-declarar-el-estado-deseado)
-8. [Paso 6 — Rolling update: promover v1 a v2 sin apagar nada](#paso-6--rolling-update-promover-v1-a-v2-sin-apagar-nada)
+8. [Paso 6 — Rolling update: promover un cambio real sin apagar nada](#paso-6--rolling-update-promover-un-cambio-real-sin-apagar-nada)
 9. [Paso 7 — Cuando algo sale mal: fallo simulado y rollback](#paso-7--cuando-algo-sale-mal-fallo-simulado-y-rollback)
 10. [Glosario rápido](#10-glosario-rápido)
-11. [Errores típicos (y por qué pasan)](#11-errores-típicos-y-por-qué-pasan)
+11. [Errores típicos (y por qué ocurren)](#11-errores-típicos-y-por-qué-ocurren)
 12. [Preguntas para repasar](#12-preguntas-para-repasar)
 
 ---
 
-## 1. ¿Qué vas a construir?
+## 1. ¿Qué se va a construir?
 
 Una aplicación web mínima, empaquetada en una imagen Docker, desplegada en un clúster de Kubernetes, actualizada en vivo sin downtime, y recuperada automáticamente cuando un despliegue sale mal — todo disparado por un pipeline de CI/CD real en GitHub Actions.
 
-No es un ejercicio abstracto: es el mismo viaje que recorre cualquier cambio de código en una empresa que usa CI/CD — **Commit → Build → Test → Package → Deploy → Monitor** — solo que aquí lo vas a ver completo, en una sola sesión, y vas a poder romperlo a propósito para entender por qué existen las salvaguardas.
+No es un ejercicio abstracto: es el mismo recorrido que hace cualquier cambio de código en una empresa que usa CI/CD — **Commit → Build → Test → Package → Deploy → Monitor** — solo que aquí lo va a ver completo, en una sola sesión, y va a poder romperlo a propósito para entender por qué existen las salvaguardas.
 
 ```
-tu commit → CI (build + test) → imagen Docker → Kubernetes (Dev/Staging/Prod) → usuarios reales
+su commit → CI (build + test) → imagen Docker → Kubernetes (Dev/Staging/Prod) → usuarios reales
 ```
 
 ## 2. Antes de empezar
 
-Necesitas: Docker Desktop corriendo, Node.js 20+, `kubectl`, Minikube, Git, y una cuenta de GitHub. Verifica que todo responde:
+Se necesita: Docker Desktop en ejecución, Node.js 20+, `kubectl`, Minikube, Git, y una cuenta de GitHub. Verifique que todo responda correctamente:
 
 ```bash
 docker info
@@ -47,16 +42,16 @@ minikube version
 git --version
 ```
 
-Si alguno falla, instálalo antes de continuar — todo lo que sigue depende de que estas herramientas funcionen.
+Si algo falla, instálelo antes de continuar — todo lo que sigue depende de que estas herramientas funcionen.
 
 ## Paso 1 — La aplicación: entender qué se está desplegando
 
-Antes de automatizar nada, hay que entender **qué es lo que viaja** por el pipeline. Es una app Node.js/Express muy simple, con tres rutas:
+Antes de automatizar nada, conviene entender **qué es lo que viaja** por el pipeline. Se trata de una app Node.js/Express muy simple, con tres rutas:
 
 | Ruta | Para qué sirve |
 |---|---|
 | `GET /health` | La usa Kubernetes para saber si el pod está sano. Si falla, Kubernetes deja de enviarle tráfico. |
-| `GET /version` | Devuelve qué versión y qué color está corriendo ese pod específico — así vas a *ver* el rolling update en vivo. |
+| `GET /version` | Devuelve qué versión y qué color está corriendo ese pod específico — así se va a *ver* el rolling update en vivo. |
 | `GET /` | Una página con el color de fondo de la versión activa, para proyectar en pantalla. |
 
 **`server.js`**
@@ -112,20 +107,20 @@ if (require.main === module) {
 module.exports = { createApp };
 ```
 
-Fíjate que `APP_VERSION`, `APP_COLOR` y `SIMULATE_FAILURE` vienen de variables de entorno, no están escritos a mano en el código. Esto importa: significa que **la misma imagen** puede comportarse distinto según cómo la configures al arrancarla — el código no cambia entre entornos, solo su configuración externa. Es exactamente la idea que vas a usar en el Paso 3.
+Observe que `APP_VERSION`, `APP_COLOR` y `SIMULATE_FAILURE` provienen de variables de entorno, no están escritos a mano en el código. Esto es importante: significa que **la misma imagen** puede comportarse distinto según cómo se configure al arrancarla — el código no cambia entre entornos, solo su configuración externa. Es exactamente la idea que se va a usar en el Paso 3.
 
-> 💡 **Por qué esto no es un detalle menor:** si `APP_VERSION` estuviera escrito directamente en el código (`"v1"` a secas), tendrías que editar el archivo y reconstruir la imagen cada vez que quisieras "cambiar de versión" para la demo. Al leerlo de una variable de entorno, la imagen es un artefacto neutral — configurable en tiempo de despliegue, no en tiempo de escritura de código.
+> 💡 **Por qué esto no es un detalle menor:** si `APP_VERSION` estuviera escrito directamente en el código (`"v1"` a secas), habría que editar el archivo y reconstruir la imagen cada vez que se quisiera "cambiar de versión" para la demo. Al leerlo de una variable de entorno, la imagen es un artefacto neutral — configurable en tiempo de despliegue, no en tiempo de escritura de código.
 
-## Paso 2 — CI local: "fail fast" en tu propia máquina
+## Paso 2 — CI local: "fail fast" en su propia máquina
 
-Antes de compartir tu código con nadie — antes incluso de construir una imagen — corre las pruebas. Este es el principio de **fail fast**: entre más temprano detectas un error, más barato es corregirlo.
+Antes de compartir el código con nadie — antes incluso de construir una imagen — ejecute las pruebas. Este es el principio de **fail fast**: entre más temprano se detecta un error, más barato resulta corregirlo.
 
 ```bash
 npm install
 npm test
 ```
 
-**Esto es lo que deberías ver:**
+**Esto es lo que debería ver:**
 
 ```
 > cicd-practica-sd@1.0.0 test
@@ -139,9 +134,9 @@ npm test
 ℹ fail 0
 ```
 
-Tres pruebas, tres verificaciones básicas: que `/health` responda 200, que `/version` traiga los campos esperados, y que `/` devuelva HTML con el contenido correcto. Nada exótico — pero es exactamente lo que un pipeline de CI real corre por ti, automáticamente, en cada commit, para que nadie tenga que acordarse de hacerlo a mano.
+Tres pruebas, tres verificaciones básicas: que `/health` responda 200, que `/version` traiga los campos esperados, y que `/` devuelva HTML con el contenido correcto. Nada exótico — pero es exactamente lo que un pipeline de CI real ejecuta automáticamente, en cada commit, para que nadie tenga que acordarse de hacerlo a mano.
 
-> ⚠️ **Ojo:** estas mismas tres pruebas se van a volver a ejecutar dos veces más — dentro del `docker build` (Paso 3) y dentro de GitHub Actions (Paso 4). No es un error de diseño ni redundancia inútil: es el mismo gate de calidad puesto en tres lugares distintos, cada uno un poco más cerca de producción. Si algo se rompe, se detiene ahí — nunca avanza al siguiente entorno.
+> ⚠️ **Nota:** estas mismas tres pruebas se van a volver a ejecutar dos veces más — dentro del `docker build` (Paso 3) y dentro de GitHub Actions (Paso 4). No es un error de diseño ni redundancia inútil: es el mismo control de calidad puesto en tres lugares distintos, cada uno un poco más cerca de producción. Si algo se rompe, se detiene ahí — nunca avanza al siguiente entorno.
 
 ## Paso 3 — Docker: el artefacto que no cambia
 
@@ -177,9 +172,9 @@ HEALTHCHECK --interval=10s --timeout=3s CMD node -e "require('http').get('http:/
 CMD ["node", "server.js"]
 ```
 
-**¿Por qué dos etapas (`AS build` y `AS runtime`)?** La etapa `build` instala *todas* las dependencias (incluidas las de desarrollo) y corre las pruebas — si `npm test` falla aquí, `docker build` entero falla y jamás se genera una imagen. La etapa `runtime` arranca de cero, copia solo el código ya probado, e instala únicamente las dependencias de producción. El resultado es una imagen más chica y más segura — el código de las pruebas ni siquiera viaja dentro de ella.
+**¿Por qué dos etapas (`AS build` y `AS runtime`)?** La etapa `build` instala *todas* las dependencias (incluidas las de desarrollo) y ejecuta las pruebas — si `npm test` falla aquí, `docker build` entero falla y jamás se genera una imagen. La etapa `runtime` arranca de cero, copia solo el código ya probado, e instala únicamente las dependencias de producción. El resultado es una imagen más pequeña y más segura — el código de las pruebas ni siquiera viaja dentro de ella.
 
-Construye la imagen y pruébala:
+Construya la imagen y pruébela:
 
 ```bash
 docker build -t cicd-practica-sd:v1 \
@@ -191,7 +186,7 @@ curl -s http://localhost:3000/health
 curl -s http://localhost:3000/version
 ```
 
-**Salida real:**
+**Ejemplo de salida:**
 
 ```
 --- /health ---
@@ -200,9 +195,9 @@ curl -s http://localhost:3000/version
 {"version":"v1","color":"blue","hostname":"20f652d4f74d"}
 ```
 
-`hostname` es el ID del contenedor — cuando más adelante tengas varios pods corriendo en Kubernetes, ese campo va a ser justamente lo que te permita distinguir a qué pod específico te respondió el `Service`.
+`hostname` es el ID del contenedor — cuando más adelante haya varios pods corriendo en Kubernetes, ese campo será justamente lo que permita distinguir a qué pod específico respondió el `Service`.
 
-Cuando termines de probar, limpia el contenedor:
+Al terminar de probar, limpie el contenedor:
 
 ```bash
 docker rm -f cicd-demo
@@ -210,7 +205,7 @@ docker rm -f cicd-demo
 
 ## Paso 4 — El pipeline real en GitHub Actions
 
-Hasta ahora todo corrió en tu laptop. Esta parte es distinta: corre en los servidores de GitHub, dispara automáticamente con cada `push`, y es lo que verías si trabajaras en un equipo real donde nadie construye imágenes a mano.
+Hasta ahora todo corrió en su laptop. Esta parte es distinta: corre en los servidores de GitHub, se dispara automáticamente con cada `push`, y es lo que se vería en un equipo real donde nadie construye imágenes a mano.
 
 **`.github/workflows/ci-cd.yml`**
 
@@ -267,12 +262,20 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 ```
 
-Fíjate en dos líneas clave:
+Observe dos líneas clave:
 
 - **`needs: build-test`** — el job `build-push` declara una dependencia explícita: no arranca hasta que `build-test` termine con éxito. Esto es *fail fast* a nivel de pipeline completo: nunca se publica una imagen que no pasó sus pruebas.
-- **`npm ci`** en vez de `npm install` — instala exactamente las versiones que dice el `package-lock.json`, sin sorpresas. Es lo que hace el build *reproducible*: la misma configuración produce siempre el mismo resultado.
+- **`npm ci`** en vez de `npm install` — instala exactamente las versiones que indica el `package-lock.json`, sin sorpresas. Es lo que hace el build *reproducible*: la misma configuración produce siempre el mismo resultado.
 
-Publica tu código y observa el pipeline correr:
+Antes del primer `push`, cree un repositorio vacío en GitHub (público, para que el paquete de `ghcr.io` quede accesible sin credenciales) y conéctelo:
+
+```bash
+git init          # si todavía no lo hizo
+git branch -M main
+git remote add origin https://github.com/<su-usuario>/cicd-practica-sd.git
+```
+
+Y ahora sí, publique el código y observe el pipeline correr:
 
 ```bash
 git add .
@@ -280,13 +283,13 @@ git commit -m "CI/CD: app demo + Dockerfile + pipeline + manifiestos k8s"
 git push -u origin main
 ```
 
-Ve a la pestaña **Actions** del repositorio en GitHub. Vas a ver primero `build-test` corriendo (las mismas 3 pruebas del Paso 2), y cuando termina en verde, `build-push` arranca solo. Al final, en la pestaña **Packages**, aparece tu imagen publicada con dos etiquetas: el hash del commit y `latest`.
+Vaya a la pestaña **Actions** del repositorio en GitHub. Se verá primero `build-test` corriendo (las mismas 3 pruebas del Paso 2), y cuando termina en verde, `build-push` arranca solo. Al final, en la pestaña **Packages**, aparece la imagen publicada con dos etiquetas: el hash del commit y `latest`.
 
-> 🤔 **¿Por qué no hay un job de "deploy" en este workflow?** Porque el clúster de Kubernetes de esta práctica (Minikube) corre en tu laptop — un servidor de GitHub en la nube no tiene forma de alcanzarlo. Por eso el paso final, el que realmente pone el cambio en "producción", lo hace una persona con `kubectl` en el Paso 6. Esa es, literalmente, la diferencia entre **Continuous Delivery** (todo queda listo, una persona aprieta el botón final) y **Continuous Deployment** (nadie aprieta nada, el propio pipeline decide). Aquí estás practicando el primero.
+> 🤔 **¿Por qué no hay un job de "deploy" en este workflow?** Porque el clúster de Kubernetes de esta práctica (Minikube) corre en su laptop — un servidor de GitHub en la nube no tiene forma de alcanzarlo. Por eso el paso final, el que realmente pone el cambio en "producción", lo ejecuta una persona con `kubectl` en el Paso 6. Esa es, literalmente, la diferencia entre **Continuous Delivery** (todo queda listo, una persona aprieta el botón final) y **Continuous Deployment** (nadie aprieta nada, el propio pipeline decide). Aquí se está practicando el primero.
 
 ## Paso 5 — Kubernetes: declarar el estado deseado
 
-Ya tienes una imagen probada y publicada. Ahora le vas a decir a Kubernetes **qué** quieres que exista (cuatro réplicas de esta imagen, expuestas en un servicio) y vas a dejar que Kubernetes se encargue del **cómo**.
+Ya se cuenta con una imagen probada y publicada. Ahora se le va a indicar a Kubernetes **qué** debe existir (cuatro réplicas de esta imagen, expuestas en un servicio) y se dejará que Kubernetes se encargue del **cómo**.
 
 ```bash
 minikube start --driver=docker
@@ -318,7 +321,7 @@ spec:
     spec:
       containers:
         - name: app
-          image: ghcr.io/ctimbi/cicd-practica-sd:latest
+          image: ghcr.io/<su-usuario>/cicd-practica-sd:latest
           ports:
             - containerPort: 3000
           env:
@@ -349,8 +352,8 @@ spec:
 Tres cosas para entender antes de aplicarlo:
 
 - **`replicas: 4`** — cuatro copias del mismo pod corriendo en paralelo. Si una falla, las otras tres siguen sirviendo tráfico.
-- **`maxUnavailable: 1` / `maxSurge: 1`** — durante una actualización, Kubernetes nunca tumba más de 1 pod viejo a la vez, y nunca crea más de 1 pod nuevo de más. Así el servicio nunca cae por debajo de 3 de 4 réplicas sanas, aunque estés actualizando en pleno tráfico.
-- **`readinessProbe`** — antes de que un pod nuevo reciba una sola petición de un usuario real, Kubernetes le pregunta a `/health`. Si no responde 200, el pod se queda "no listo" y el `Service` jamás le manda tráfico. Esto es lo que va a proteger la práctica del Paso 7.
+- **`maxUnavailable: 1` / `maxSurge: 1`** — durante una actualización, Kubernetes nunca retira más de 1 pod viejo a la vez, y nunca crea más de 1 pod nuevo de más. Así el servicio nunca cae por debajo de 3 de 4 réplicas sanas, incluso mientras se actualiza en pleno tráfico.
+- **`readinessProbe`** — antes de que un pod nuevo reciba una sola petición de un usuario real, Kubernetes le consulta a `/health`. Si no responde 200, el pod se queda "no listo" y el `Service` jamás le envía tráfico. Esto es lo que va a proteger la práctica del Paso 7.
 
 **`k8s/service.yaml`**
 
@@ -370,7 +373,9 @@ spec:
 
 El `Service` es el balanceador: reparte cada petición entrante entre todos los pods que estén "listos" (`Ready`) en ese momento — nunca a mano, siempre según el estado real que reporta el `readinessProbe`.
 
-Aplica y verifica:
+**Antes de aplicar**, abra `k8s/deployment.yaml` y reemplace `<su-usuario>` por su usuario real de GitHub (el mismo que usó en el Paso 4) — si la imagen todavía no existe en `ghcr.io` porque aún no se ha hecho el primer `push`, hágalo primero (Paso 4) y vuelva aquí.
+
+Aplique y verifique:
 
 ```bash
 kubectl apply -f k8s/deployment.yaml
@@ -378,7 +383,7 @@ kubectl apply -f k8s/service.yaml
 kubectl rollout status deployment/cicd-practica-sd
 ```
 
-**Salida real:**
+**Ejemplo de salida** (los tiempos y el orden exacto de las líneas pueden variar un poco en cada máquina, pero debe terminar igual):
 
 ```
 deployment.apps/cicd-practica-sd created
@@ -390,41 +395,58 @@ Waiting for deployment "cicd-practica-sd" rollout to finish: 3 of 4 updated repl
 deployment "cicd-practica-sd" successfully rolled out
 ```
 
-Expón el servicio y pruébalo:
+Exponga el servicio. Minikube asignará un puerto local aleatorio, así que en vez de escribirlo a mano cada vez, guárdelo en una variable — se va a reutilizar en los pasos 6 y 7:
 
 ```bash
-minikube service cicd-practica-sd --url
-# copia la URL que imprime, por ejemplo http://127.0.0.1:50562
-curl -s http://127.0.0.1:50562/version
+export URL=$(minikube service cicd-practica-sd --url)
+echo "La aplicacion esta en: $URL"
+curl -s $URL/version
 ```
 
-## Paso 6 — Rolling update: promover v1 a v2 sin apagar nada
+> 💡 Cada vez que abra una terminal nueva (por ejemplo, si retoma esta práctica otro día), vuelva a ejecutar `export URL=$(minikube service cicd-practica-sd --url)` — esa variable no persiste entre sesiones de terminal.
 
-Este es el momento en que "algo cambió en el código" se convierte en "los usuarios ya están usando la versión nueva" — sin que nadie haya notado una interrupción.
+## Paso 6 — Rolling update: promover un cambio real sin apagar nada
 
-En un flujo real, esto arranca con un cambio de código de verdad: editas `server.js`, haces `commit` y `push`, GitHub Actions construye y publica la nueva imagen con un tag nuevo (el hash del commit), y tú promueves ese tag. Aquí, para verlo en vivo sin depender de internet en el salón, construimos una `v2` explícita:
+Este es el momento en que "algo cambió en el código" se convierte en "los usuarios ya están usando la versión nueva" — sin que nadie haya notado una interrupción. A diferencia de los pasos anteriores, aquí **no se construye nada en la laptop**: la imagen ya la construyó y publicó GitHub Actions cuando se hizo `push` en el Paso 4.
+
+### 6.1 Cambiar algo de verdad y publicarlo
+
+Edite `server.js` (o el `Dockerfile`, si desea cambiar los valores por defecto de `APP_VERSION`/`APP_COLOR`), y súbalo:
 
 ```bash
-docker build -t cicd-practica-sd:v2 \
-  --build-arg APP_VERSION=v2 \
-  --build-arg APP_COLOR=green .
-
-minikube image load cicd-practica-sd:v2
+git add server.js
+git commit -m "cambiar titulo de la app"
+git push
 ```
 
-Y ahora, el comando que realmente dispara el cambio — el "botón final" del que hablábamos en el Paso 4:
+Vaya a la pestaña **Actions** del repositorio y espere a que el run termine en verde. Cuando termine, obtenga el hash exacto de **su** commit:
 
 ```bash
-kubectl set image deployment/cicd-practica-sd app=cicd-practica-sd:v2
+git log -1 --format=%H
+```
+
+Se obtendrá un hash largo, único para ese commit (algo como `2f7caf511e0656923ef202790494cfff33ead0bd`, pero el suyo será distinto) — es el mismo hash con el que GitHub Actions etiquetó la imagen nueva en `ghcr.io`. Guárdelo también en una variable, para no tener que copiarlo a mano en cada comando:
+
+```bash
+export SHA=$(git log -1 --format=%H)
+echo "La imagen nueva es: ghcr.io/<su-usuario>/cicd-practica-sd:$SHA"
+```
+
+> 💡 **Importante:** el workflow de esta práctica *no* pasa `--build-arg` al construir la imagen (véase el `docker/build-push-action@v5` del Paso 4) — así que si se desea que `/version` también cambie visualmente, no basta con cambiar `server.js`; también hay que cambiar los valores por defecto `ARG APP_VERSION=...` / `ARG APP_COLOR=...` del `Dockerfile` y subir ese cambio junto con el resto. Lo que sí cambia siempre, pase lo que pase, es el hash del commit — y por eso es el hash, no un tag inventado como `v2`, lo que identifica de verdad una versión en el flujo real.
+
+### 6.2 Promover el cambio (el botón final de Continuous Delivery)
+
+Con el hash y la URL guardados en variables, este es el comando que realmente dispara el cambio en el clúster:
+
+```bash
+kubectl set image deployment/cicd-practica-sd app=ghcr.io/<su-usuario>/cicd-practica-sd:$SHA
 kubectl rollout status deployment/cicd-practica-sd
 ```
 
-**Salida real — observa el reemplazo gradual, nunca todo de golpe:**
+**Ejemplo de salida — obsérvese el reemplazo gradual, nunca todo de golpe (los nombres de pod serán distintos en cada clúster):**
 
 ```
 deployment.apps/cicd-practica-sd image updated
-Waiting for deployment "cicd-practica-sd" rollout to finish: 0 out of 4 new replicas have been updated...
-Waiting for deployment "cicd-practica-sd" rollout to finish: 1 out of 4 new replicas have been updated...
 Waiting for deployment "cicd-practica-sd" rollout to finish: 2 out of 4 new replicas have been updated...
 Waiting for deployment "cicd-practica-sd" rollout to finish: 3 out of 4 new replicas have been updated...
 Waiting for deployment "cicd-practica-sd" rollout to finish: 1 old replicas are pending termination...
@@ -432,50 +454,76 @@ Waiting for deployment "cicd-practica-sd" rollout to finish: 3 of 4 updated repl
 deployment "cicd-practica-sd" successfully rolled out
 ```
 
-Confirma que el `Service` ahora reparte entre pods nuevos, distintos entre sí:
+Confirme que el `Service` ahora reparte entre pods nuevos, ya con el código actualizado:
 
 ```bash
-for i in 1 2 3 4 5 6 7 8; do curl -s http://127.0.0.1:50562/version; echo; done
+curl -s $URL/version; echo
+curl -s $URL/ | grep -o '<h1>.*</h1>'
 ```
 
-**Salida real (8 peticiones seguidas, mira el campo `hostname`):**
+**Debería verse reflejado el cambio propio**, por ejemplo (esto es solo ilustrativo — lo que importa es que aparezca *su* edición, no este texto exacto):
 
 ```
-{"version":"v2","color":"green","hostname":"cicd-practica-sd-c48c44648-rxltk"}
-{"version":"v2","color":"green","hostname":"cicd-practica-sd-c48c44648-4zr96"}
-{"version":"v2","color":"green","hostname":"cicd-practica-sd-c48c44648-4c2gq"}
-{"version":"v2","color":"green","hostname":"cicd-practica-sd-c48c44648-rxltk"}
-{"version":"v2","color":"green","hostname":"cicd-practica-sd-c48c44648-4zr96"}
-{"version":"v2","color":"green","hostname":"cicd-practica-sd-c48c44648-86tph"}
-{"version":"v2","color":"green","hostname":"cicd-practica-sd-c48c44648-4c2gq"}
-{"version":"v2","color":"green","hostname":"cicd-practica-sd-c48c44648-86tph"}
+{"version":"v1","color":"blue","hostname":"cicd-practica-sd-6d768bd548-2mvpj"}
+<h1>Sistemas Distribuidos - (aquí el cambio realizado)</h1>
 ```
 
-Cuatro `hostname` distintos respondiendo, todos en `v2` — el `Service` está balanceando entre las 4 réplicas nuevas. En ningún momento de todo este proceso el servicio dejó de responder: eso es lo que significa "downtime cercano a cero" cuando hablamos de rolling update.
+Kubernetes no sabe (ni le importa) que ese contenido cambió — solo sabe que se le entregó un nuevo `image:` y que la actualización nueva pasó el `readinessProbe`. En ningún momento de todo este proceso el `Service` dejó de responder: eso es lo que significa "downtime cercano a cero" cuando se habla de rolling update.
+
+<details>
+<summary><strong>Plan B — si no hay internet en el salón (sin GitHub Actions)</strong></summary>
+
+Si por alguna razón no se puede depender de internet durante la práctica, se puede simular el mismo mecanismo construyendo y cargando la imagen directamente en Minikube, sin pasar por `ghcr.io`:
+
+```bash
+docker build -t cicd-practica-sd:v2 \
+  --build-arg APP_VERSION=v2 \
+  --build-arg APP_COLOR=green .
+
+minikube image load cicd-practica-sd:v2
+
+kubectl set image deployment/cicd-practica-sd app=cicd-practica-sd:v2
+kubectl rollout status deployment/cicd-practica-sd
+```
+
+La mecánica de Kubernetes (rolling update, probes, balanceo) es idéntica — lo único que cambia es de dónde proviene la imagen. Véase la sección de errores típicos si Minikube no reemplaza una imagen con un tag ya usado.
+
+</details>
 
 ## Paso 7 — Cuando algo sale mal: fallo simulado y rollback
 
-Ahora la parte que casi nunca se practica en un curso, pero es la más importante en producción: ¿qué pasa cuando el despliegue que acabas de promover está roto?
+Ahora la parte que casi nunca se practica en un curso, pero es la más importante en producción: ¿qué ocurre cuando el despliegue que se acaba de promover está roto? Y otra vez, esto se hace con un commit real, no con una imagen local.
 
-Construimos una tercera imagen cuya variable `SIMULATE_FAILURE=true` hace que `/health` responda siempre `500`:
+### 7.1 Romper el despliegue a propósito (con un commit real)
 
-```bash
-docker build -t cicd-practica-sd:v3-roto \
-  --build-arg APP_VERSION=v3-roto \
-  --build-arg APP_COLOR=red \
-  --build-arg SIMULATE_FAILURE=true .
+En el `Dockerfile`, cambie el valor por defecto de `ARG SIMULATE_FAILURE` a `true` — eso hace que `/health` responda siempre `500`:
 
-minikube image load cicd-practica-sd:v3-roto
+```dockerfile
+ARG APP_VERSION=v3-roto
+ARG APP_COLOR=red
+ARG SIMULATE_FAILURE=true
 ```
 
-La promovemos igual que en el Paso 6:
+Suba el cambio y espere a que el pipeline termine. Guarde también este hash en una variable (distinta a `$SHA` del paso anterior, para no perder la referencia a la versión buena):
 
 ```bash
-kubectl set image deployment/cicd-practica-sd app=cicd-practica-sd:v3-roto
-kubectl rollout status deployment/cicd-practica-sd --timeout=20s
+git add Dockerfile
+git commit -m "Simular despliegue fallido (SIMULATE_FAILURE=true) para practica de rollback"
+git push
+export SHA_BUENO=$SHA              # la version que se sabe que funciona (Paso 6)
+export SHA_ROTO=$(git log -1 --format=%H)   # el commit recien subido, roto a proposito
 ```
 
-**Salida real — el rollout nunca termina, se queda esperando:**
+> 💡 Conviene dejar este commit "roto" en el historial — no hace falta revertirlo después. Es justo el commit que sirve para repetir este ejercicio de rollback cuantas veces se necesite, sin tener que volver a romper nada.
+
+### 7.2 Promover la imagen rota y observar el rollout atascarse
+
+```bash
+kubectl set image deployment/cicd-practica-sd app=ghcr.io/<su-usuario>/cicd-practica-sd:$SHA_ROTO
+kubectl rollout status deployment/cicd-practica-sd --timeout=25s
+```
+
+**Ejemplo de salida — el rollout nunca termina, se queda esperando:**
 
 ```
 deployment.apps/cicd-practica-sd image updated
@@ -490,26 +538,22 @@ Warning  Unhealthy  Readiness probe failed: HTTP probe failed with statuscode: 5
 Warning  Unhealthy  Liveness probe failed: HTTP probe failed with statuscode: 500
 ```
 
-**Esta es la parte que hay que entender bien:** los pods nuevos (rotos) nunca llegan a estar "listos", así que el `Service` **nunca les manda tráfico**. Compruébalo:
+**Esta es la parte que hay que entender bien:** los pods nuevos (rotos) nunca llegan a estar "listos", así que el `Service` **nunca les envía tráfico**. Compruébelo:
 
 ```bash
-curl -s http://127.0.0.1:50562/version
+curl -s $URL/version
 ```
 
-```
-{"version":"v2","color":"green","hostname":"cicd-practica-sd-c48c44648-qrwnq"}
-```
+Debería seguir viéndose la versión buena (la de antes del commit roto), servida desde uno de los pods que nunca se tocaron. El `readinessProbe` combinado con `maxUnavailable: 1` ya limitó el daño: como máximo 1 de las 4 réplicas buenas se sacrificó para probar la versión nueva, y esa réplica dañada jamás recibió tráfico real. Esta es la idea que conecta todo el curso: **la mejor forma de tolerar una falla es nunca haber expuesto a todos los usuarios a ella.**
 
-Sigue respondiendo `v2` — la versión buena. El `readinessProbe` combinado con `maxUnavailable: 1` ya limitó el daño: como máximo 1 de las 4 réplicas buenas se sacrificó para probar la versión nueva, y esa réplica dañada jamás recibió tráfico real. Esta es la idea que conecta todo el curso: **la mejor forma de tolerar una falla es nunca haber expuesto a todos los usuarios a ella.**
-
-Ahora sí, revertimos:
+### 7.3 Ejecutar el rollback
 
 ```bash
 kubectl rollout undo deployment/cicd-practica-sd
 kubectl rollout status deployment/cicd-practica-sd
 ```
 
-**Salida real:**
+**Ejemplo de salida:**
 
 ```
 deployment.apps/cicd-practica-sd rolled back
@@ -519,19 +563,30 @@ deployment "cicd-practica-sd" successfully rolled out
 ```
 
 ```bash
-for i in 1 2 3 4; do curl -s http://127.0.0.1:50562/version; echo; done
+curl -s $URL/version
 ```
 
-```
-{"version":"v2","color":"green","hostname":"cicd-practica-sd-c48c44648-qrwnq"}
-{"version":"v2","color":"green","hostname":"cicd-practica-sd-c48c44648-qrwnq"}
-{"version":"v2","color":"green","hostname":"cicd-practica-sd-c48c44648-qrwnq"}
-{"version":"v2","color":"green","hostname":"cicd-practica-sd-c48c44648-qrwnq"}
+Confirme que se volvió a ver la versión buena. Todo esto — desplegar la imagen real que construyó el propio pipeline, detectar el fallo, y revertir — ocurrió sin que ningún usuario real recibiera un error, y sin que nadie tuviera que reconstruir nada a mano: `kubectl rollout undo` simplemente le indica a Kubernetes "vuelva a la revisión anterior de este `Deployment`".
+
+<details>
+<summary><strong>Plan B — versión con imagen local (sin depender de internet)</strong></summary>
+
+```bash
+docker build -t cicd-practica-sd:v3-roto \
+  --build-arg APP_VERSION=v3-roto \
+  --build-arg APP_COLOR=red \
+  --build-arg SIMULATE_FAILURE=true .
+
+minikube image load cicd-practica-sd:v3-roto
+
+kubectl set image deployment/cicd-practica-sd app=cicd-practica-sd:v3-roto
+kubectl rollout status deployment/cicd-practica-sd --timeout=20s
+# ... mismo comportamiento: se atasca, y se revierte con kubectl rollout undo
 ```
 
-De vuelta a `v2`, servicio sano. Todo esto — desplegar, detectar el fallo, y revertir — pasó sin que ningún usuario real recibiera un error, y sin que nadie tuviera que reconstruir nada a mano: `kubectl rollout undo` simplemente le dice a Kubernetes "vuelve a la revisión anterior de este `Deployment`".
+</details>
 
-> ⚠️ **Un detalle importante que aprendimos probando esta misma guía:** `kubectl rollout undo`, sin más argumentos, revierte solo la **última revisión**, no necesariamente "la última versión que sabías que funcionaba". Cada `kubectl set image` o `kubectl set env` que cambie la plantilla del pod crea una revisión nueva. Si acumulas varios cambios sueltos antes de descubrir el problema, un solo `undo` puede dejarte en un punto intermedio, no en el bueno. La forma segura de revisar esto es:
+> ⚠️ **Un detalle importante, detectado al validar esta misma guía:** `kubectl rollout undo`, sin más argumentos, revierte solo la **última revisión**, no necesariamente "la última versión que se sabía que funcionaba". Cada `kubectl set image` o `kubectl set env` que cambie la plantilla del pod crea una revisión nueva. Si se acumulan varios cambios sueltos antes de descubrir el problema, un solo `undo` puede dejar el despliegue en un punto intermedio, no en el bueno. La forma segura de revisar esto es:
 >
 > ```bash
 > kubectl rollout history deployment/cicd-practica-sd
@@ -553,23 +608,29 @@ De vuelta a `v2`, servicio sano. Todo esto — desplegar, detectar el fallo, y r
 | **Rollback** | Volver a la versión anterior de un despliegue cuando la nueva falla. |
 | **Fail fast** | Detener el pipeline en el primer paso que falle, en vez de seguir gastando tiempo (y arriesgando producción) más adelante. |
 
-## 11. Errores típicos (y por qué pasan)
+## 11. Errores típicos (y por qué ocurren)
 
-Estos tres problemas ocurrieron de verdad al preparar esta práctica — se documentan porque son más instructivos que cualquier explicación teórica sobre "por qué hay que probar el pipeline":
+Estos problemas ocurrieron de verdad al preparar esta práctica — se documentan porque son más instructivos que cualquier explicación teórica sobre "por qué hay que probar el pipeline":
 
-**"Pasé `--build-arg` pero la imagen no cambió."**
-Docker no da error si le pasas un `--build-arg` que el `Dockerfile` no declaró con `ARG` — simplemente lo ignora. Si tu `Dockerfile` no tiene la línea `ARG APP_VERSION=v1` (y las demás), tu variable nunca llega a la imagen. Revisa siempre que cada `--build-arg` tenga su `ARG` correspondiente.
+**"Se cambió `server.js` pero `/version` sigue mostrando lo mismo."**
+El workflow de GitHub Actions (`.github/workflows/ci-cd.yml`) construye la imagen sin pasar `--build-arg`, así que `/version` siempre refleja los valores por defecto que tenga el `Dockerfile` en ese momento (`ARG APP_VERSION=...`), no lo que se cambió en `server.js`. Si se desea que `/version` cambie, hay que editar también esos `ARG` en el `Dockerfile` y subirlos junto con el resto. Lo que sí cambia siempre es el *contenido real* de la página (`/`) y el hash del commit — que es, en el fondo, el identificador de versión que de verdad importa.
 
-**"Reconstruí la imagen pero Minikube sigue usando la vieja."**
-Minikube puede cachear una imagen por su nombre de tag y no reemplazarla al volver a hacer `minikube image load` con el mismo tag. Si esto te pasa: `minikube ssh -- docker rmi -f <tag>` y vuelve a cargarla. La forma de evitarlo del todo: usa un tag distinto cada vez (el pipeline real lo hace con el hash del commit, nunca reutiliza `latest` para verificar un cambio específico).
+**"Se usó `kubectl set image ... app=cicd-practica-sd:v2` y devolvió `ErrImagePull` / `ImagePullBackOff`."**
+Ese tag solo existe si la imagen se construyó localmente con `docker build -t cicd-practica-sd:v2 ...` y se cargó con `minikube image load`. Si se está en el flujo real con GitHub Actions, la imagen vive en `ghcr.io`, no en el Docker local — el nombre completo es `ghcr.io/<su-usuario>/cicd-practica-sd:<hash-del-commit>`, nunca un tag corto inventado.
 
-**"Hice rollback pero no volvió a la versión que esperaba."**
-Como se explica en el Paso 7: cada cambio a la plantilla del pod (imagen, variables de entorno) crea una revisión nueva. `kubectl rollout undo` sin argumentos deshace solo una. Usa `kubectl rollout history` para ver todas las revisiones antes de decidir a cuál volver.
+**"Se pasó `--build-arg` pero la imagen no cambió." (en el Plan B local)**
+Docker no da error si se le pasa un `--build-arg` que el `Dockerfile` no declaró con `ARG` — simplemente lo ignora. Revise siempre que cada `--build-arg` tenga su `ARG` correspondiente en el `Dockerfile`.
+
+**"Se reconstruyó la imagen pero Minikube sigue usando la anterior." (en el Plan B local)**
+Minikube puede cachear una imagen por su nombre de tag y no reemplazarla al volver a ejecutar `minikube image load` con el mismo tag. Si esto ocurre: `minikube ssh -- docker rmi -f <tag>` y volver a cargarla. En el flujo real esto no ocurre nunca, porque cada build de GitHub Actions usa un tag distinto (el hash del commit).
+
+**"Se hizo rollback pero no volvió a la versión esperada."**
+Cada cambio a la plantilla del pod (imagen, variables de entorno) crea una revisión nueva en el `Deployment`. `kubectl rollout undo` sin argumentos deshace solo la última. Use `kubectl rollout history deployment/cicd-practica-sd` para ver todas las revisiones antes de decidir a cuál volver, y `--to-revision=N` para ser explícito.
 
 ## 12. Preguntas para repasar
 
-1. ¿Por qué el `Dockerfile` corre `npm test` dentro del build, si ya corriste `npm test` a mano en el Paso 2? ¿No es repetir el mismo trabajo dos veces?
-2. En el Paso 6, ¿qué hubiera pasado si `maxUnavailable` fuera igual a `4` (el total de réplicas) en vez de `1`?
-3. El pipeline de este ejercicio no tiene ninguna aprobación humana antes de llegar a Kubernetes — apenas pasa CI, tú mismo ejecutas `kubectl set image`. ¿Eso lo convierte en *Continuous Delivery* o en *Continuous Deployment*? ¿Por qué?
-4. En el Paso 7, ¿qué pasó exactamente con el pod que se quedó a medio actualizar (`0/1 Running`, pero nunca `Ready`)? ¿Por qué Kubernetes no lo mató inmediatamente?
+1. ¿Por qué el `Dockerfile` ejecuta `npm test` dentro del build, si ya se ejecutó `npm test` a mano en el Paso 2? ¿No es repetir el mismo trabajo dos veces?
+2. En el Paso 6, ¿qué habría pasado si `maxUnavailable` fuera igual a `4` (el total de réplicas) en vez de `1`?
+3. El pipeline de este ejercicio no tiene ninguna aprobación humana antes de llegar a Kubernetes — apenas pasa CI, es la propia persona quien ejecuta `kubectl set image`. ¿Eso lo convierte en *Continuous Delivery* o en *Continuous Deployment*? ¿Por qué?
+4. En el Paso 7, ¿qué ocurrió exactamente con el pod que quedó a medio actualizar (`0/1 Running`, pero nunca `Ready`)? ¿Por qué Kubernetes no lo eliminó inmediatamente?
 5. Si en vez de `readinessProbe` el `Deployment` no tuviera ningún probe configurado, ¿el `Service` se habría dado cuenta de que la `v3-roto` estaba fallando? ¿Qué habrían visto los usuarios?
